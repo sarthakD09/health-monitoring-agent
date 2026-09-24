@@ -1,35 +1,21 @@
 # Architecture
 
 ```text
-                DATA SOURCES
-       +----------------+----------------+
-       |                                 |
-   LIVE / ESP32                     REPLAY / DATASET
-       |                                 |
-       +----------------+----------------+
+  CONTROLLED SCENARIOS / DATASET REPLAY / ESP32
                         |
-                 Canonical Schema
+              Adapters → Canonical Observation
                         |
-                 Signal Quality
+  Signal Quality → Personal Baseline → Temporal Anomaly
                         |
-               Personal Baseline
+             Context → Risk Assessment → Policy
                         |
-               Temporal Anomaly
+                 MONITOR / RECHECK / ESCALATE
                         |
-                  Context Engine
+            Python application service + SQLite
                         |
-                State / Risk Model
+              FastAPI REST and WebSocket boundary
                         |
-              +---------+---------+
-              |                   |
-         Agent Layer        Policy Engine
-              |                   |
-       ask / retrieve /     validate state,
-       explain / recommend  action, escalation
-              |                   |
-              +---------+---------+
-                        |
-              Dashboard / Event Log
+                Next.js + TypeScript presentation
 ```
 
 ## Core boundaries
@@ -62,4 +48,12 @@ Uses tools to retrieve evidence and interact with the patient. It returns a stru
 Stores longitudinal observations, decisions, feedback, and experiment metadata.
 
 ### Dashboard
-Visualization and demo surface only. It must not contain business logic.
+The Next.js frontend is the target visualization and interaction surface. It
+must not contain business logic. The current Streamlit dashboard is legacy and
+will remain untouched until the FastAPI, Next.js, integration-test, and manual
+verification gates in the architecture specification are met.
+
+## Full specification
+
+The detailed, frozen migration design is in
+`docs/superpowers/specs/2026-09-24-fullstack-architecture-design.md`.
