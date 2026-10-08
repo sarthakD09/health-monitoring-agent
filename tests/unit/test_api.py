@@ -35,3 +35,45 @@ def test_process_observation() -> None:
     assert body["observation"]["subject_id"] == "subject-api-test"
     assert body["signal_quality"]["status"] == "trustworthy"
     assert body["decision"]["action"] == "recheck"
+
+def test_invalid_observation_is_rejected() -> None:
+    response = client.post(
+        "/observations",
+        json={
+            "timestamp": "2026-10-09T10:00:00+05:30",
+            "subject_id": "subject-invalid",
+            "source": "scenario",
+            "heart_rate": 70.0,
+            "signal_quality": 2.0,
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_same_subject_reuses_monitoring_service() -> None:
+    first = client.post(
+        "/observations",
+        json={
+            "timestamp": "2026-10-09T10:00:00+05:30",
+            "subject_id": "subject-reuse-test",
+            "source": "scenario",
+            "heart_rate": 70.0,
+            "signal_quality": 0.95,
+        },
+    )
+
+    second = client.post(
+        "/observations",
+        json={
+            "timestamp": "2026-10-09T10:01:00+05:30",
+            "subject_id": "subject-reuse-test",
+            "source": "scenario",
+            "heart_rate": 71.0,
+            "signal_quality": 0.95,
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    assert second.json()["baseline"]["window_size"] == 1

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.application.monitoring import MonitoringService
 from app.models import Observation
@@ -18,6 +18,12 @@ _services: dict[str, MonitoringService] = {}
 
 
 def get_monitoring_service(subject_id: str) -> MonitoringService:
+    if not subject_id:
+        raise HTTPException(
+            status_code=400,
+            detail="subject_id must not be empty",
+        )
+
     if subject_id not in _services:
         _services[subject_id] = MonitoringService(
             subject_id=subject_id,
@@ -35,4 +41,10 @@ def health_check() -> dict[str, str]:
 def process_observation(observation: Observation):
     service = get_monitoring_service(observation.subject_id)
 
-    return service.process(observation)
+    try:
+        return service.process(observation)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
