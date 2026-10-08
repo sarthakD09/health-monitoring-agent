@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 
+from app.application.monitoring import MonitoringService
+from app.models import Observation
+
+
 app = FastAPI(
     title="Health Monitoring Agent API",
     version="0.1.0",
@@ -10,6 +14,25 @@ app = FastAPI(
 )
 
 
+_services: dict[str, MonitoringService] = {}
+
+
+def get_monitoring_service(subject_id: str) -> MonitoringService:
+    if subject_id not in _services:
+        _services[subject_id] = MonitoringService(
+            subject_id=subject_id,
+        )
+
+    return _services[subject_id]
+
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/observations")
+def process_observation(observation: Observation):
+    service = get_monitoring_service(observation.subject_id)
+
+    return service.process(observation)
