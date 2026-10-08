@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.application.monitoring import MonitoringService
 from app.models import Observation
@@ -48,3 +48,33 @@ def process_observation(observation: Observation):
             status_code=422,
             detail=str(exc),
         ) from exc
+
+@app.websocket("/ws/monitor/{subject_id}")
+async def monitor_websocket(
+    websocket: WebSocket,
+    subject_id: str,
+) -> None:
+    await websocket.accept()
+
+    service = get_monitoring_service(subject_id)
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+
+            observation = Observation.model_validate(payload)
+
+            if observation.subject_id != subject_id:
+                await websocket.send_json(
+                    {
+                        "error": "subject_id does not match WebSocket path",
+                    }
+                )
+                continue
+
+            result = service.process(observation)
+
+            await websocket.send_json(result.model_dump(mode="json"))
+
+    except WebSocketDisconnect:
+        return
