@@ -13,6 +13,7 @@ from app.models import (
 from app.personalization.baseline import BaselineState, EWMA
 from app.risk.assessment import assess_risk
 from app.signal.quality import evaluate_signal_quality
+from app.storage.sqlite import SQLiteBaselineRepository
 
 
 class MonitoringService:
@@ -23,6 +24,7 @@ class MonitoringService:
         alpha: float = 0.1,
         warmup_minimum: int = 3,
         thresholds: MonitoringThresholds | None = None,
+        baseline_repository: SQLiteBaselineRepository | None = None,
     ) -> None:
         self.thresholds = thresholds or MonitoringThresholds()
 
@@ -33,6 +35,16 @@ class MonitoringService:
             warmup_minimum=warmup_minimum,
             thresholds=self.thresholds,
         )
+        self.baseline_repository = baseline_repository
+
+        if self.baseline_repository is not None:
+            persisted_state = self.baseline_repository.load(
+                subject_id=subject_id,
+                metric=metric,
+            )
+
+            if persisted_state is not None:
+                self.baseline.restore(persisted_state)
 
         self._consecutive_deviations = 0
 
@@ -100,11 +112,7 @@ class MonitoringService:
         return MonitoringResult(
             observation=observation,
             signal_quality=signal_quality,
-            baseline=(
-                self._to_baseline(baseline_state)
-                if baseline_state is not None
-                else None
-            ),
+            baseline=(self._to_baseline(baseline_state) if baseline_state is not None else None),
             anomaly=anomaly,
             context=context,
             risk=risk,
@@ -127,7 +135,11 @@ class MonitoringService:
             return
 
         try:
-            self.baseline.update(observation)
+            state = self.baseline.update(observation)
+
+            if self.baseline_repository is not None:
+                self.baseline_repository.save(state)
+
         except ValueError:
             return
 

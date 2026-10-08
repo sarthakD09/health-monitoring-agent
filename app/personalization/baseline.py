@@ -92,3 +92,20 @@ class EWMA:
             alpha=self.alpha,
             warmup_minimum=self.warmup_minimum,
         )
+
+    def restore(self, state: BaselineState) -> None:
+        if state.subject_id != self.subject_id:
+            raise ValueError("baseline state subject does not match baseline subject")
+
+        if state.metric != self.metric:
+            raise ValueError("baseline state metric does not match baseline metric")
+
+        if state.alpha != self.alpha:
+            raise ValueError("baseline state alpha does not match baseline alpha")
+
+        if state.warmup_minimum != self.warmup_minimum:
+            raise ValueError("baseline state warmup minimum does not match baseline configuration")
+
+        self._mean = state.mean
+        self._variance = state.variance
+        self._count = state.count
