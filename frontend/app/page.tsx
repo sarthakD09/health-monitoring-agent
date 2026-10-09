@@ -1,11 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MonitoringResult, Observation } from "./types";
 
 type Mode = "demo" | "live";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+const WS_URL = API_URL.replace(/^http/, "ws");
+const SUBJECT_ID = "dashboard-demo-subject";
+
+type WebSocketStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "error";
 
 const demoVitals = {
   heartRate: 72,
@@ -34,7 +43,28 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState("");
   const [result, setResult] = useState<MonitoringResult | null>(null);
+  const [wsStatus, setWsStatus] = useState<WebSocketStatus>("disconnected");
+  const [wsError, setWsError] = useState("");
+  const [wsSending, setWsSending] = useState(false);
 
+  const wsRef = useRef<WebSocket | null>(null);
+  useEffect(() => {
+    return () => {
+      const socket = wsRef.current;
+
+      if (socket) {
+        wsRef.current = null;
+
+        // Prevent callbacks from updating state after unmount.
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+
+        socket.close();
+      }
+    };
+  }, []);
   async function checkBackend() {
     setChecking(true);
     setApiError("");
@@ -83,7 +113,109 @@ export default function Home() {
       setSubmitting(false);
     }
   }
+  function connectWebSocket() {
+  const current = wsRef.current;
 
+  if (
+    current &&
+    (current.readyState === WebSocket.OPEN ||
+      current.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+
+  setWsError("");
+  setWsStatus("connecting");
+
+  try {
+    const socket = new WebSocket(
+      `${WS_URL}/ws/monitor/${encodeURIComponent(SUBJECT_ID)}`,
+    );
+
+    wsRef.current = socket;
+
+    socket.onopen = () => {
+      setWsStatus("connected");
+      setWsError("");
+    };
+
+    socket.onmessage = (event: MessageEvent<string>) => {
+      setWsSending(false);
+
+      try {
+        const payload: unknown = JSON.parse(event.data);
+
+        if (
+          typeof payload === "object" &&
+          payload !== null &&
+          "error" in payload
+        ) {
+          const message = String(payload.error);
+          setWsError(message);
+          return;
+        }
+
+        // The backend returns a MonitoringResult for valid observations.
+        setResult(payload as MonitoringResult);
+        setMode("live");
+        setBackendStatus("Connected");
+        setWsError("");
+      } catch {
+        setWsError("Received an invalid message from the WebSocket.");
+      }
+    };
+
+    socket.onerror = () => {
+      setWsStatus("error");
+      setWsError(
+        "WebSocket connection failed. Check that FastAPI is running.",
+      );
+      setWsSending(false);
+    };
+
+    socket.onclose = () => {
+      if (wsRef.current === socket) {
+        wsRef.current = null;
+        setWsStatus("disconnected");
+        setWsSending(false);
+      }
+    };
+  } catch {
+    setWsStatus("error");
+    setWsError("Could not create the WebSocket connection.");
+  }
+}
+
+function disconnectWebSocket() {
+  const socket = wsRef.current;
+  wsRef.current = null;
+
+  if (socket) {
+    socket.close();
+  }
+
+  setWsStatus("disconnected");
+  setWsSending(false);
+}
+
+function sendSampleOverWebSocket() {
+  const socket = wsRef.current;
+
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    setWsError("Connect the WebSocket before sending a sample.");
+    return;
+  }
+
+  setWsError("");
+  setWsSending(true);
+
+  try {
+    socket.send(JSON.stringify(makeObservation()));
+  } catch {
+    setWsSending(false);
+    setWsError("Could not send the sample observation.");
+  }
+}
   const liveResult = mode === "live" ? result : null;
   const vitals = liveResult
     ? {
@@ -207,6 +339,51 @@ export default function Home() {
             <div className="system-row"><span>Decision engine</span><strong>Deterministic policy</strong></div>
             <button className="primary-button" onClick={checkBackend} disabled={checking}>{checking ? "Checking…" : "Check backend connection"} <span>↗</span></button>
             <button className="primary-button" onClick={() => { setMode("live"); void submitObservation(); }} disabled={submitting}>{submitting ? "Submitting…" : "Submit sample observation"} <span>→</span></button>
+            <div className="system-row">
+              <span>WebSocket status</span>
+              <strong
+                className={
+                  wsStatus === "connected" ? "text-good" : ""
+                }
+              >
+                {wsStatus}
+              </strong>
+            </div>
+
+            <div className="system-row">
+              <span>WebSocket endpoint</span>
+              <code>/ws/monitor/…</code>
+            </div>
+
+            <button
+              className="primary-button"
+              onClick={connectWebSocket}
+              disabled={wsStatus === "connecting" || wsStatus === "connected"}
+            >
+              {wsStatus === "connecting" ? "Connecting…" : "Connect live channel"}
+            </button>
+
+            <button
+              className="primary-button"
+              onClick={sendSampleOverWebSocket}
+              disabled={wsStatus !== "connected" || wsSending}
+            >
+              {wsSending ? "Waiting for response…" : "Send WebSocket sample"}
+            </button>
+
+            <button
+              className="primary-button"
+              onClick={disconnectWebSocket}
+              disabled={wsStatus === "disconnected"}
+            >
+              Disconnect live channel
+            </button>
+
+            {wsError && (
+              <p role="alert" className="system-note">
+                {wsError}
+              </p>
+            )}
             {apiError && <p role="alert" className="system-note">{apiError}</p>}
             <p className="system-note">Keep FastAPI running on port 8000. This sample does not represent a real patient.</p>
           </article>
