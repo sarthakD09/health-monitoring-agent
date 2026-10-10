@@ -2,7 +2,25 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.application.monitoring import MonitoringService
 from app.models import Observation
+from datetime import datetime, timezone
 
+
+from app.ingestion.scenarios import ScenarioKind, generate_scenario
+from pydantic import BaseModel, Field, field_validator
+
+
+class ScenarioRequest(BaseModel):
+    kind: ScenarioKind
+    count: int = Field(default=10, ge=1, le=100)
+    subject_id: str = Field(min_length=1, max_length=100)
+    interval_seconds: int = Field(default=1, ge=1, le=3600)
+
+    @field_validator("subject_id")
+    @classmethod
+    def subject_id_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("subject_id must not be blank")
+        return value
 
 app = FastAPI(
     title="Health Monitoring Agent API",
@@ -49,6 +67,35 @@ def process_observation(observation: Observation):
 
     try:
         return service.process(observation)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+@app.post("/scenarios/generate")
+def generate_monitoring_scenario(request: ScenarioRequest):
+    start_time = datetime.now(timezone.utc)
+
+    try:
+        observations = generate_scenario(
+            kind=request.kind,
+            count=request.count,
+            subject_id=request.subject_id,
+            start_time=start_time,
+            interval_seconds=request.interval_seconds,
+        )
+
+        service = get_monitoring_service(request.subject_id)
+        results = [service.process(item) for item in observations]
+
+        return {
+            "scenario": request.kind.value,
+            "results": [
+                result.model_dump(mode="json")
+                for result in results
+            ],
+        }
     except ValueError as exc:
         raise HTTPException(
             status_code=422,

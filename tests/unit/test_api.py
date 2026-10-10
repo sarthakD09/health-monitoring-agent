@@ -116,3 +116,84 @@ def test_monitor_websocket_rejects_subject_mismatch() -> None:
     assert response == {
         "error": "subject_id does not match WebSocket path",
     }
+def test_generate_stable_scenario() -> None:
+    response = client.post(
+        "/scenarios/generate",
+        json={
+            "kind": "stable",
+            "count": 3,
+            "subject_id": "scenario-api-stable",
+            "interval_seconds": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["scenario"] == "stable"
+    assert len(body["results"]) == 3
+    assert all(
+        item["observation"]["source"] == "scenario"
+        for item in body["results"]
+    )
+    assert all(
+        item["observation"]["subject_id"] == "scenario-api-stable"
+        for item in body["results"]
+    )
+
+
+def test_generate_all_supported_scenarios() -> None:
+    for kind in ("stable", "drift", "poor_signal", "missing_data"):
+        response = client.post(
+            "/scenarios/generate",
+            json={
+                "kind": kind,
+                "count": 2,
+                "subject_id": f"scenario-api-{kind}",
+                "interval_seconds": 1,
+            },
+        )
+
+        assert response.status_code == 200, (
+            f"Scenario {kind!r} failed: {response.text}"
+        )
+        assert len(response.json()["results"]) == 2
+
+
+def test_generate_scenario_rejects_unknown_kind() -> None:
+    response = client.post(
+        "/scenarios/generate",
+        json={
+            "kind": "unknown",
+            "count": 3,
+            "subject_id": "scenario-api-invalid-kind",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_scenario_rejects_invalid_count() -> None:
+    response = client.post(
+        "/scenarios/generate",
+        json={
+            "kind": "stable",
+            "count": 0,
+            "subject_id": "scenario-api-invalid-count",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_scenario_rejects_empty_subject_id() -> None:
+    response = client.post(
+        "/scenarios/generate",
+        json={
+            "kind": "stable",
+            "count": 2,
+            "subject_id": "   ",
+        },
+    )
+
+    assert response.status_code == 422

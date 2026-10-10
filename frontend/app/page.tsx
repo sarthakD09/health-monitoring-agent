@@ -4,6 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import type { MonitoringResult, Observation } from "./types";
 
 type Mode = "demo" | "live";
+
+type ScenarioKind =
+  | "stable"
+  | "drift"
+  | "poor_signal"
+  | "missing_data";
+
+const SCENARIOS: { value: ScenarioKind; label: string }[] = [
+  { value: "stable", label: "Stable signals" },
+  { value: "drift", label: "Gradual HR drift" },
+  { value: "poor_signal", label: "Poor signal quality" },
+  { value: "missing_data", label: "Missing measurements" },
+];
+
 type HistoryEntry = {
   id: string;
   receivedAt: string;
@@ -42,6 +56,10 @@ function makeObservation(): Observation {
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("demo");
+  const [scenarioKind, setScenarioKind] =
+  useState<ScenarioKind>("stable");
+  const [scenarioCount, setScenarioCount] = useState(10);
+  const [generatingScenario, setGeneratingScenario] = useState(false);
   const [backendStatus, setBackendStatus] = useState("Not checked");
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -95,6 +113,54 @@ export default function Home() {
       setApiError("Could not reach FastAPI. Confirm that the backend is running on port 8000.");
     } finally {
       setChecking(false);
+    }
+  }
+
+  async function generateScenarioRun() {
+    setGeneratingScenario(true);
+    setApiError("");
+
+    try {
+      const response = await fetch(`${API_URL}/scenarios/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: scenarioKind,
+          count: scenarioCount,
+          subject_id: `dashboard-${scenarioKind}-${Date.now()}`,
+          interval_seconds: 1,
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Scenario API returned ${response.status}: ${detail}`);
+      }
+
+      const data: {
+        scenario: ScenarioKind;
+        results: MonitoringResult[];
+      } = await response.json();
+
+      if (!Array.isArray(data.results)) {
+        throw new Error("Scenario API returned an invalid response.");
+      }
+
+      // Keep the displayed history bounded to the latest 50 results.
+      for (const item of data.results) {
+        recordResult(item);
+      }
+
+      setMode("live");
+      setBackendStatus("Connected");
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Could not generate the scenario.",
+      );
+    } finally {
+      setGeneratingScenario(false);
     }
   }
 
@@ -332,7 +398,67 @@ function sendSampleOverWebSocket() {
             />
           </article>
         </div>
+        <article className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-header">
+            <div>
+              <h2>Controlled scenario experiments</h2>
+              <p>
+                Generate synthetic observations and evaluate the existing monitoring
+                pipeline.
+              </p>
+            </div>
+            <span className="pill neutral">SYNTHETIC</span>
+          </div>
 
+          <div className="system-row">
+            <label htmlFor="scenario-kind">Scenario</label>
+            <select
+              id="scenario-kind"
+              value={scenarioKind}
+              onChange={(event) =>
+                setScenarioKind(event.target.value as ScenarioKind)
+              }
+              disabled={generatingScenario}
+            >
+              {SCENARIOS.map((scenario) => (
+                <option key={scenario.value} value={scenario.value}>
+                  {scenario.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="system-row">
+            <label htmlFor="scenario-count">Observations (1–100)</label>
+            <input
+              id="scenario-count"
+              type="number"
+              min={1}
+              max={100}
+              value={scenarioCount}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isInteger(value) && value >= 1 && value <= 100) {
+                  setScenarioCount(value);
+                }
+              }}
+              disabled={generatingScenario}
+            />
+          </div>
+
+          <button
+            className="primary-button"
+            onClick={generateScenarioRun}
+            disabled={generatingScenario}
+          >
+            {generatingScenario ? "Generating scenario…" : "Generate & run scenario"}
+          </button>
+
+          <p className="system-note">
+            Synthetic research data only. Results are not clinical predictions or
+            medical advice.
+          </p>
+        </article>
         <div className="content-grid">
           <article className="panel">
             <div className="panel-header">
