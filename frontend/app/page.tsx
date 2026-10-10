@@ -1,5 +1,5 @@
 "use client";
-
+import TrendChart from "./components/TrendChart";
 import { useEffect, useRef, useState } from "react";
 import type { MonitoringResult, Observation } from "./types";
 
@@ -302,19 +302,34 @@ function sendSampleOverWebSocket() {
             <div className="metric-top"><span>Heart rate</span><span className="metric-icon coral">♥</span></div>
             <div className="metric-value">{vitals.heartRate ?? "—"}<small> bpm</small></div>
             <div className="metric-foot"><span className="dot coral-bg" /> {liveResult ? "API response" : "Illustrative value"}</div>
-            <div className="sparkline coral-line"><svg viewBox="0 0 240 44" preserveAspectRatio="none"><path d="M0 27 L18 25 L31 30 L46 18 L60 23 L77 13 L92 21 L108 17 L124 27 L141 22 L156 25 L171 11 L185 20 L202 16 L220 22 L240 13" /></svg></div>
+            <TrendChart
+              label="Heart rate"
+              unit="bpm"
+              color="#ff8395"
+              values={[...history].reverse().map((entry) => entry.result.observation.heart_rate)}
+            />
           </article>
           <article className="metric-card">
             <div className="metric-top"><span>Oxygen saturation</span><span className="metric-icon blue">◉</span></div>
             <div className="metric-value">{vitals.spo2 ?? "—"}<small>%</small></div>
             <div className="metric-foot"><span className="dot blue-bg" /> {liveResult ? "API response" : "Illustrative value"}</div>
-            <div className="sparkline blue-line"><svg viewBox="0 0 240 44" preserveAspectRatio="none"><path d="M0 23 L20 22 L40 25 L60 19 L80 22 L100 18 L120 23 L140 21 L160 24 L180 19 L200 22 L220 18 L240 20" /></svg></div>
+            <TrendChart
+              label="SpO₂"
+              unit="%"
+              color="#68afff"
+              values={[...history].reverse().map((entry) => entry.result.observation.spo2)}
+            />
           </article>
           <article className="metric-card">
             <div className="metric-top"><span>Temperature</span><span className="metric-icon amber">♨</span></div>
             <div className="metric-value">{vitals.temperature ?? "—"}<small> °C</small></div>
             <div className="metric-foot"><span className="dot amber-bg" /> {liveResult ? "API response" : "Illustrative value"}</div>
-            <div className="sparkline amber-line"><svg viewBox="0 0 240 44" preserveAspectRatio="none"><path d="M0 29 L20 27 L40 28 L60 23 L80 25 L100 21 L120 24 L140 20 L160 22 L180 19 L200 22 L220 18 L240 20" /></svg></div>
+            <TrendChart
+              label="Temperature"
+              unit="°C"
+              color="#efbc69"
+              values={[...history].reverse().map((entry) => entry.result.observation.temperature)}
+            />
           </article>
         </div>
 

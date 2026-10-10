@@ -67,9 +67,39 @@ h2 { font-size: 14px; margin: 0 0 6px; font-weight: 650; }
 .metric-value small { color: #8590a3; font-size: 12px; font-weight: 400; letter-spacing: 0; }
 .metric-foot { display: flex; align-items: center; gap: 7px; color: #7f8b9e; font-size: 10px; }
 .coral-bg { background: #ff8d9b; } .blue-bg { background: #7abaff; } .amber-bg { background: #f5c477; }
-.sparkline { height: 40px; margin-top: 13px; opacity: 0.8; }
-.sparkline svg { width: 100%; height: 100%; overflow: visible; }
-.sparkline path { fill: none; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.trend-chart {
+  margin-top: 13px;
+  min-width: 0;
+}
+
+.trend-chart svg {
+  display: block;
+  width: 100%;
+  height: 52px;
+  overflow: visible;
+}
+
+.trend-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #8b97a9;
+  font-size: 10px;
+}
+
+.trend-foot,
+.trend-empty {
+  color: #748197;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.trend-empty {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+}
 .coral-line path { stroke: #ff8395; } .blue-line path { stroke: #68afff; } .amber-line path { stroke: #efbc69; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(270px, 1fr); gap: 16px; }
 .panel { padding: 20px; min-width: 0; }
