@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { MonitoringResult, Observation } from "./types";
 
 type Mode = "demo" | "live";
-
+type HistoryEntry = {
+  id: string;
+  receivedAt: string;
+  result: MonitoringResult;
+};
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 const WS_URL = API_URL.replace(/^http/, "ws");
@@ -46,8 +50,19 @@ export default function Home() {
   const [wsStatus, setWsStatus] = useState<WebSocketStatus>("disconnected");
   const [wsError, setWsError] = useState("");
   const [wsSending, setWsSending] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  function recordResult(data: MonitoringResult) {
+    const entry: HistoryEntry = {
+      id: `${Date.now()}-${Math.random()}`,
+      receivedAt: new Date().toISOString(),
+      result: data,
+    };
+
+    setHistory((previous) => [entry, ...previous].slice(0, 50));
+    setResult(data);
+  }
   useEffect(() => {
     return () => {
       const socket = wsRef.current;
@@ -101,7 +116,7 @@ export default function Home() {
       }
 
       const data: MonitoringResult = await response.json();
-      setResult(data);
+      recordResult(data);
       setBackendStatus("Connected");
     } catch (error) {
       setApiError(
@@ -156,7 +171,7 @@ export default function Home() {
         }
 
         // The backend returns a MonitoringResult for valid observations.
-        setResult(payload as MonitoringResult);
+        recordResult(payload as MonitoringResult);
         setMode("live");
         setBackendStatus("Connected");
         setWsError("");
@@ -397,7 +412,68 @@ function sendSampleOverWebSocket() {
             <p><strong>Risk reasons:</strong> {liveResult.risk.reasons.join("; ") || "none"}</p>
           </article>
         )}
+        <article className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-header">
+            <div>
+              <h2>Recent monitoring history</h2>
+              <p>Latest REST and WebSocket responses · Session only</p>
+            </div>
+            <span className="pill neutral">{history.length} / 50</span>
+          </div>
 
+          {history.length === 0 ? (
+            <p className="system-note">
+              No monitoring results recorded yet. Submit a sample through the REST
+              API or WebSocket to begin collecting history.
+            </p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: "12px 8px" }}>Received</th>
+                    <th style={{ padding: "12px 8px" }}>Source</th>
+                    <th style={{ padding: "12px 8px" }}>Heart rate</th>
+                    <th style={{ padding: "12px 8px" }}>Signal quality</th>
+                    <th style={{ padding: "12px 8px" }}>Anomaly</th>
+                    <th style={{ padding: "12px 8px" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((entry) => {
+                    const item = entry.result;
+
+                    return (
+                      <tr key={entry.id}>
+                        <td style={{ padding: "12px 8px" }}>
+                          {new Date(entry.receivedAt).toLocaleTimeString()}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          {item.observation.source}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          {item.observation.heart_rate ?? "—"} bpm
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          {item.signal_quality.status}
+                          {item.signal_quality.score !== null
+                            ? ` · ${item.signal_quality.score.toFixed(2)}`
+                            : ""}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          {item.anomaly.severity}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          {item.decision.action}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
         <footer className="footer">
           <span>HEALTH MONITORING AGENT <span className="footer-separator">/</span> DEVELOPMENT BUILD</span>
           <span>Research prototype · Not for clinical decisions</span>
